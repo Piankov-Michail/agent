@@ -6,11 +6,13 @@ from models import OllamaCloudFactory
 from tools import create_tavily_search
 from langchain.messages import AIMessageChunk
 from langchain_core.runnables import RunnableConfig
+from middleware import DateTimeMiddleware
 
 from tavily import TavilyClient
 
 import dotenv
 import os
+from datetime import datetime
 
 _original_dumps = _cl_cb.dumps
 def _fixed_dumps(obj, *, pretty=False, **kwargs):
@@ -24,6 +26,7 @@ OLLAMA_API_KEY = os.getenv('OLLAMA_API_KEY')
 OLLAMA_CLOUD_MODEL = os.getenv('OLLAMA_CLOUD_MODEL')
 OLLAMA_CLOUD_ENDPOINT = os.getenv('OLLAMA_CLOUD_ENDPOINT')
 TAVILY_API = os.getenv('TAVILY_API')
+DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', '').strip() or None
 
 
 @cl.on_chat_start
@@ -34,7 +37,15 @@ async def start():
         token=OLLAMA_API_KEY,
     )
     tools = [create_tavily_search(TavilyClient(api_key=TAVILY_API))]
-    agent = DefaultAgentFactory.get_agent(model=model, tools=tools)
+
+    timezone = _detect_timezone()
+    middleware = DateTimeMiddleware(timezone_name=timezone)
+
+    agent = DefaultAgentFactory.get_agent(
+        model=model,
+        tools=tools,
+        middleware=[middleware],
+    )
     cl.user_session.set("agent", agent)
 
 
@@ -57,3 +68,12 @@ async def main(message: cl.Message):
             await msg.stream_token(chunk.content)
 
     await msg.send()
+
+
+def _detect_timezone() -> str | None:
+    if DEFAULT_TIMEZONE:
+        return DEFAULT_TIMEZONE
+    try:
+        return datetime.now().astimezone().tzname()
+    except Exception:
+        return None

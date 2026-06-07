@@ -1,1 +1,2 @@
-from .agents import AgentFabric, DefaultAgentFactory
+from .agents import AgentFabric
+from .default_agent import DefaultAgentFactory
