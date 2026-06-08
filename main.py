@@ -1,4 +1,5 @@
 import asyncio
+import uuid
 from agents import DefaultAgentFactory
 from models import OllamaCloudFactory
 from tools import create_tavily_search
@@ -20,7 +21,9 @@ DB_URI = os.getenv('DB_URI')
 TAVILY_API = os.getenv('TAVILY_API')
 DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', '').strip() or None
 
-THREAD_ID = "cli-default"
+SESSION_ID = str(uuid.uuid4())
+CHAT_ID = "42"
+THREAD_ID = f"{SESSION_ID}::{CHAT_ID}"
 
 
 class Agent:
