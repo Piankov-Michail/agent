@@ -3,3 +3,5 @@ langchain==1.3.2
 langchain-ollama==1.1.0
 langgraph-checkpoint-postgres==3.1.0
 tavily-python==0.7.25
+asyncpg==0.31.0
+sqlalchemy[asyncio]==2.0.50

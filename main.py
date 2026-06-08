@@ -1,7 +1,10 @@
+import asyncio
+import uuid
 from agents import DefaultAgentFactory
 from models import OllamaCloudFactory
 from tools import create_tavily_search
 from middleware import DateTimeMiddleware
+from memory import create_checkpointer
 
 from tavily import TavilyClient
 
@@ -18,9 +21,19 @@ DB_URI = os.getenv('DB_URI')
 TAVILY_API = os.getenv('TAVILY_API')
 DEFAULT_TIMEZONE = os.getenv('DEFAULT_TIMEZONE', '').strip() or None
 
+SESSION_ID = str(uuid.uuid4())
+CHAT_ID = "42"
+THREAD_ID = f"{SESSION_ID}::{CHAT_ID}"
+
 
 class Agent:
     def __init__(self):
+        self._agent = None
+        self._initialized = False
+
+    async def _ensure(self):
+        if self._initialized:
+            return
         model = OllamaCloudFactory.get_model(
             model=OLLAMA_CLOUD_MODEL,
             base_url=OLLAMA_CLOUD_ENDPOINT,
@@ -29,19 +42,30 @@ class Agent:
         tools = [create_tavily_search(TavilyClient(api_key=TAVILY_API))]
         timezone = DEFAULT_TIMEZONE or datetime.now().astimezone().tzname()
         middleware = DateTimeMiddleware(timezone_name=timezone)
-        self.agent = DefaultAgentFactory.get_agent(
+        checkpointer = await create_checkpointer(DB_URI)
+        self._agent = DefaultAgentFactory.get_agent(
             model=model,
             tools=tools,
             middleware=[middleware],
+            checkpointer=checkpointer,
         )
+        self._initialized = True
 
-    def run_query(self, user_query: str):
-        result = self.agent.invoke({"messages": [("user", user_query)]})
+    async def run_query(self, user_query: str):
+        await self._ensure()
+        result = await self._agent.ainvoke(
+            {"messages": [("user", user_query)]},
+            config={"configurable": {"thread_id": THREAD_ID}},
+        )
         return result["messages"][-1].content
 
 
-if __name__ == "__main__":
+async def main():
     agent = Agent()
     while True:
-        query = input("USER: ")
-        print(f"AI: {agent.run_query(query)}")
+        query = await asyncio.to_thread(input, "USER: ")
+        print(f"AI: {await agent.run_query(query)}")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
